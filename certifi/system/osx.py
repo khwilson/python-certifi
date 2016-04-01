@@ -1,10 +1,13 @@
 import os
+import re
 import subprocess
 
 
 SYSTEM_KEYCHAIN = '/Library/Keychains/System.keychain'
 SYSTEM_CA_KEYCHAIN = '/System/Library/Keychains/SystemRootCertificates.keychain'
 USER_CA_BUNDLE = os.path.expanduser('~/Library/Caches/certifi/OS-bundle.pem')
+
+_CERT_RE = re.compile(r'(?s)(-{5}BEGIN CERTIFICATE-{5}.*?-{5}END CERTIFICATE-{5})')
 
 
 def mtime_or_never(filename):
@@ -17,7 +20,22 @@ def mtime_or_never(filename):
 
 def try_security():
     try:
-        return subprocess.check_output(['security', 'find-certificate', '-a', '-p'])
+        potential_certs = subprocess.check_output(['security', 'find-certificate', '-a', '-p'])
+        valid_certs = []
+        count_invalid = 0
+        for cert in _CERT_RE.finditer(potential_certs):
+            cert = cert.groups()[0]
+            proc = subprocess.Popen(['openssl', 'x509', '-inform', 'pem',
+                                     '-checkend', '0', '-noout'], stdin=subprocess.PIPE)
+            proc.communicate(input=cert)
+            proc.stdin.close()
+            proc.wait()
+            if proc.returncode == 0:
+                valid_certs.append(cert)
+            else:
+                count_invalid += 1
+
+        return '\n'.join(valid_certs)
     except subprocess.CalledProcessError:
         # Assume that nothing is wrong and set this to blank
         return ''
