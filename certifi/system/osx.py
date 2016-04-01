@@ -22,7 +22,6 @@ def try_security():
     try:
         potential_certs = subprocess.check_output(['security', 'find-certificate', '-a', '-p'])
         valid_certs = []
-        count_invalid = 0
         for cert in _CERT_RE.finditer(potential_certs):
             cert = cert.groups()[0]
             proc = subprocess.Popen(['openssl', 'x509', '-inform', 'pem',
@@ -32,8 +31,6 @@ def try_security():
             proc.wait()
             if proc.returncode == 0:
                 valid_certs.append(cert)
-            else:
-                count_invalid += 1
 
         return '\n'.join(valid_certs)
     except subprocess.CalledProcessError:
